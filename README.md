@@ -8,7 +8,7 @@ GitHub CopilotとClaude-3.5-Sonnetの支援を受けて開発した音声可視�
 
 ## デモ
 
-[デモページはこちら](https://~)
+[デモページはこちら](https://kaieda-masaki.github.io/workshop/)
 
 ## 使用技術
 
