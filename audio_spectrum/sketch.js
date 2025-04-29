@@ -1,10 +1,13 @@
 let sound;
 let fft;
 let smoothedSpectrum = [];
-const FFT_SIZE = 2048;
+const FFT_SIZE = 2048;  // FFTサイズを2048に変更
+const MARGIN = 60;
+const BUTTON_TOP = 15;
 
 function setup() {
   createCanvas(windowWidth, windowHeight);
+  frameRate(60);
   
   // FFTの初期化
   fft = new p5.FFT(0.8, FFT_SIZE);
@@ -21,7 +24,7 @@ function setup() {
       console.log('音声ファイルのロード成功');
       
       let button = createButton('Play');
-      button.position(20, 20);
+      positionButton(button);
       button.mousePressed(function() {
         if (!sound.isPlaying()) {
           sound.play();
@@ -38,97 +41,107 @@ function setup() {
   );
 }
 
+function positionButton(button) {
+  let centerX = MARGIN + (width - MARGIN * 2) / 2;
+  button.position(centerX - 50, BUTTON_TOP);
+}
+
 function draw() {
   background(26, 26, 26);
+  drawGrid();
   
   if (sound && sound.isPlaying()) {
-    // スペクトラムの取得
-    let spectrum = fft.analyze();
+    drawSpectrum();
+  }
+}
+
+function drawSpectrum() {
+  let spectrum = fft.analyze();
+  noStroke();
+  
+  // 表示可能な幅を計算
+  let availableWidth = width - (MARGIN * 2);
+  
+  // スペクトラムの描画
+  for (let i = 0; i < spectrum.length; i++) {
+    // 周波数の対数スケール化（x座標）
+    let freqValue = map(i, 0, spectrum.length, 20, 20000);
+    let logX = map(log(freqValue), log(20), log(20000), MARGIN, width - MARGIN);
     
-    // グリッドの描画
-    drawGrid();
+    // 周波数帯域ごとのスムージング係数を計算
+    let freqRatio = log(freqValue) / log(20000);
+    let smoothingFactor = map(freqRatio, 0, 1, 0.15, 0.25);  // 低域から高域へ徐々に変化
     
-    // スペクトラムの描画
-    noStroke();
+    // スムージング
+    smoothedSpectrum[i] = lerp(smoothedSpectrum[i], spectrum[i], smoothingFactor);
     
-    // 周波数バンドごとに描画
-    for (let i = 0; i < spectrum.length; i++) {
-      // スムージング
-      smoothedSpectrum[i] = lerp(smoothedSpectrum[i], spectrum[i], 0.2);
-      
-      // 周波数の対数スケール化（x座標）
-      let freqValue = map(i, 0, spectrum.length, 20, 20000); // 20Hz-20kHz
-      let logX = map(log(freqValue), log(20), log(20000), 0, width);
-      
-      // 振幅の対数スケール化（y座標）
-      let amplitude = map(smoothedSpectrum[i], 0, 255, -96, 0); // dBスケール
-      let logY = map(amplitude, -96, 0, height * 0.9, height * 0.1);
-      
-      // グラデーションの色を計算
-      let alpha = map(amplitude, -96, 0, 30, 200);
-      let c = color(0, 200, 255, alpha);
-      fill(c);
-      
-      // バーの描画
-      let barWidth = (width / spectrum.length) * 2;
-      let barHeight = height * 0.9 - logY;
-      
-      // グロー効果
-      drawingContext.shadowBlur = 15;
-      drawingContext.shadowColor = color(0, 200, 255, 30);
-      
-      rect(logX, logY, barWidth, barHeight);
-    }
-    drawingContext.shadowBlur = 0;
+    // 振幅の対数スケール化（y座標）
+    let amplitude = map(smoothedSpectrum[i], 0, 255, -96, 0);
+    let logY = map(amplitude, -96, 0, height - MARGIN, MARGIN);
+    
+    // バーの幅を計算（密度が一様になるように調整）
+    let nextFreq = map(i + 1, 0, spectrum.length, 20, 20000);
+    let nextX = map(log(nextFreq), log(20), log(20000), MARGIN, width - MARGIN);
+    let spacing = nextX - logX;
+    let barWidth = min(max(spacing * 0.8, 2), 20);  // 最小2px、最大20px
+    
+    // グラデーションの色を計算
+    let alpha = map(amplitude, -96, 0, 30, 200);
+    let c = color(0, 200, 255, alpha);
+    fill(c);
+    
+    // バーの描画
+    rect(logX - barWidth/2, logY, barWidth, height - MARGIN - logY);
   }
 }
 
 function drawGrid() {
-  // 横線（振幅）
   strokeWeight(0.5);
+  
+  // 横線（振幅）
   let dbSteps = [-96, -84, -72, -60, -48, -36, -24, -12, 0];
   for (let db of dbSteps) {
-    let y = map(db, -96, 0, height * 0.9, height * 0.1);
-    
-    // メインの目盛り線
+    let y = map(db, -96, 0, height - MARGIN, MARGIN);
     stroke(60);
-    line(40, y, width, y);
+    line(MARGIN, y, width - MARGIN, y);
     
-    // ラベル
     noStroke();
     fill(150);
     textAlign(RIGHT, CENTER);
     textFont('Inter');
     textSize(10);
-    text(db + 'dB', 35, y);
+    text(db + 'dB', MARGIN - 5, y);
   }
   
   // 縦線（周波数）
-  let freqSteps = [20, 50, 100, 200, 500, 1000, 2000, 5000, 10000, 20000];
+  let freqSteps = [20, 30, 50, 100, 200, 500, 1000, 2000, 5000, 10000, 20000];
   for (let freq of freqSteps) {
-    let x = map(log(freq), log(20), log(20000), 0, width);
-    
-    // メインの目盛り線
+    let x = map(log(freq), log(20), log(20000), MARGIN, width - MARGIN);
     stroke(60);
-    line(x, height * 0.1, x, height * 0.9);
+    line(x, MARGIN, x, height - MARGIN);
     
-    // ラベル
     noStroke();
     fill(150);
     textAlign(CENTER, TOP);
     textFont('Inter');
     textSize(10);
     let label = freq >= 1000 ? (freq/1000) + 'k' : freq;
-    text(label + 'Hz', x, height * 0.91);
+    text(label + 'Hz', x, height - MARGIN + 5);
   }
   
   // 境界線
   stroke(80);
   strokeWeight(1);
-  line(40, height * 0.1, 40, height * 0.9); // 左縦線
-  line(40, height * 0.9, width, height * 0.9); // 下横線
+  noFill();
+  rect(MARGIN, MARGIN, width - MARGIN * 2, height - MARGIN * 2);
 }
 
 function windowResized() {
   resizeCanvas(windowWidth, windowHeight);
+  if (sound) {
+    let button = select('button');
+    if (button) {
+      positionButton(button);
+    }
+  }
 }
